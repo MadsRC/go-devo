@@ -1,3 +1,13 @@
+// Copyright Mads R. Havmand.
+// All Rights Reserved
+
+// Package devo provides a client library for working with the REST API
+// interfaces available with https://devo.com.
+//
+// This package is NOT production ready as is.
+//
+// The official API documentation for the upstream Devo API's can be found at
+// https://docs.devo.com/confluence/ndt/latest/api-reference.
 package devo
 
 import (
@@ -5,19 +15,22 @@ import (
 	"time"
 )
 
-const ALERTS_API_US_DEFAULT_ENDPOINT = "https://api-us.devo.com/alerts"
-const ALERTS_API_EU_DEFAULT_ENDPOINT = "https://api-eu.devo.com/alerts"
+const (
+	// Default endpoint for US based Devo domains.
+	ALERTS_API_US_DEFAULT_ENDPOINT = "https://api-us.devo.com/alerts"
+
+	// Default endpoint for EU based Devo domains.
+	ALERTS_API_EU_DEFAULT_ENDPOINT = "https://api-eu.devo.com/alerts"
+)
 
 type Config struct {
-	HTTP *http.Client
-	Alerts struct {
-		Token string
-		Address string
-	}
+	HTTP   *http.Client
+	Alerts *AlertsConfig
 }
 
 type Client struct {
-	Config *Config
+	config *Config
+	Alerts *AlertsClient
 }
 
 func NewClient(config *Config) *Client {
@@ -28,9 +41,7 @@ func NewClient(config *Config) *Client {
 		config.HTTP = &http.Client{Timeout: 10 * time.Second}
 	}
 
-	if config.Alerts.Address == "" {
-		config.Alerts.Address = ALERTS_API_US_DEFAULT_ENDPOINT
-	}
+	alerts := NewAlertsClient(config.Alerts)
 
-	return &Client{Config: config}
+	return &Client{config: config, Alerts: alerts}
 }
