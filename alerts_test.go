@@ -79,6 +79,43 @@ func TestAlerts(t *testing.T) {
 			}
 		]`
 		svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Standalonetoken") != "nothinginparticular" {
+				t.Fail()
+			}
+			fmt.Fprintf(w, responseData)
+		}))
+		defer svr.Close()
+		_, err := listAlertDefinitions(&http.Client{}, svr.URL, "nothinginparticular")
+		if err != nil {
+			t.Errorf("%+v\n", err)
+		}
+	})
+	t.Run("createAlertDefinition", func(t *testing.T) {
+		responseData := `{
+			"id": "70736",
+			"creationDate": 1604567644173,
+			"name": "Alert_API_each",
+			"message": "$eventdate $username - $count - API",
+			"description": "Alert created by API",
+			"categoryId": "7",
+			"subcategory": "lib.my.testfake.AlertAPI_v660",
+			"subcategoryId": "133",
+			"isActive": true,
+			"isFavorite": false,
+			"isAlertChain": false,
+			"alertCorrelationContext": {
+				"id": "622",
+				"nameId": "my.alert.testfake.Alert_API_each_Staging_1604567643224",
+				"ownerEmail": "john@xx.com",
+				"querySourceCode": "from siem.logtrust.web.activity group every 1m by username, url every 1m select count() as count",
+				"priority": 5,
+				"correlationTrigger": {
+					"kind": "each"
+				}
+			},
+			"actionPolicyId": []
+		}`
+		svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("Content-Type") != "application/json" {
 				t.Fail()
 			}
@@ -88,7 +125,17 @@ func TestAlerts(t *testing.T) {
 			fmt.Fprintf(w, responseData)
 		}))
 		defer svr.Close()
-		_, err := listAlertDefinitions(&http.Client{}, svr.URL, "nothinginparticular")
+		alert := alert{
+			Name:        "Alert_API_each",
+			Subcategory: "lib.my.testfake.AlertAPI_v660",
+			AlertCorrelationContext: alertCorrelationContext{
+				QuerySourceCode: "from siem.logtrust.web.activity group every 1m by username, url every 1m select count() as count",
+				CorrelationTrigger: alertCorrelationTrigger{
+					Kind: "each",
+				},
+			},
+		}
+		err := createAlertDefinition(&http.Client{}, svr.URL, "nothinginparticular", &alert)
 		if err != nil {
 			t.Errorf("%+v\n", err)
 		}
