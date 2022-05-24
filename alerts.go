@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 )
 
 type AlertCorrelationTrigger struct {
@@ -44,6 +45,32 @@ type Alert struct {
 	ActionPolicyID          []interface{} `json:"actionPolicyId"`
 }
 
+type AlertsService interface {
+	List(parameters *AlertListRequest) ([]Alert, error)
+	Create(createRequest *AlertCreateRequest) (*Alert, error)
+	Update(updateRequest *AlertUpdateRequest) (*Alert, error)
+	Delete(deleteRequest *AlertDeleteRequest) error
+	Status(statusRequest *AlertStatusUpdateRequest) error
+}
+
+type AlertsServiceOp struct {
+	client *Client
+}
+
+const (
+	// Default endpoint for US based Devo domains.
+	ALERTS_API_US_DEFAULT_ENDPOINT = "https://api-us.devo.com/alerts"
+
+	// Default endpoint for EU based Devo domains.
+	ALERTS_API_EU_DEFAULT_ENDPOINT = "https://api-eu.devo.com/alerts"
+
+	// Default path for API Alerting
+	ALERTS_API_PATH_ALERT_DEFINITIONS = "/v1/alertDefinitions"
+
+	// Default path for API Alerting status
+	ALERTS_API_PATH_ALERT_DEFINITIONS_STATUS = "/v1/alertDefinitions/status"
+)
+
 // Type ListAlertDefinitionsParameters contains the parameters that can be used
 // provided to the ListAlertDefinitions method.
 //
@@ -63,7 +90,7 @@ type Alert struct {
 //
 // Some struct attributes here is intentionally strings, and not ints, to allow
 // us to distinguish between empty/no-value and 0.
-type ListAlertDefinitionsParameters struct {
+type AlertListRequest struct {
 	// Define the group to get. See parent struct documentation.
 	Page string
 
@@ -82,238 +109,7 @@ type ListAlertDefinitionsParameters struct {
 	IDFilter string
 }
 
-/*
-
-func (client *AlertsClient) ListAlertDefinitions(parameters *ListAlertDefinitionsParameters) ([]alert, error) {
-	address, err := url.Parse(fmt.Sprintf("%s/v1/alertDefinitions", strings.TrimRight(client.Config.Address, "/")))
-	if err != nil {
-		return nil, err
-	}
-
-	if parameters.Page != "" {
-		address.Query().Add("page", parameters.Page)
-	}
-	if parameters.Size != "" {
-		address.Query().Add("size", parameters.Size)
-	}
-	if parameters.NameFilter != "" {
-		address.Query().Add("nameFilter", parameters.NameFilter)
-	}
-	if parameters.IDFilter != "" {
-		address.Query().Add("idFilter", parameters.IDFilter)
-	}
-	return listAlertDefinitions(client.Config.HTTP, address.String(), client.Config.Token)
-}
-
-func listAlertDefinitions(client *http.Client, address string, token string) ([]alert, error) {
-	request, err := http.NewRequest(http.MethodGet, address, nil)
-	if err != nil {
-		return nil, err
-	}
-	addAlertAuthentication(request, token)
-	response, err := client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	alert := []alert{}
-	err = json.NewDecoder(response.Body).Decode(&alert)
-	defer response.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-	return alert, nil
-}
-
-func (client *AlertsClient) CreateAlertDefinition(alert *alert) error {
-	address, err := url.Parse(fmt.Sprintf("%s/v1/alertDefinitions", strings.TrimRight(client.Config.Address, "/")))
-	if err != nil {
-		return err
-	}
-
-	if alert == nil {
-		return errors.New("Provided alert definition cannot be nil")
-	}
-	if alert.Name == "" {
-		return errors.New("Empty name attribute in alert definition")
-	}
-	if alert.Subcategory == "" {
-		return errors.New("Empty subcategory attribute in alert definition")
-	}
-	if alert.AlertCorrelationContext.QuerySourceCode == "" {
-		return errors.New("Empty querySourceCode attribute in alertCorrelationContext in alert definition")
-	}
-	if alert.AlertCorrelationContext.CorrelationTrigger.Kind == "" {
-		return errors.New("Empty Kind attribute in CorrelationTrigger in alert definition")
-	}
-
-	return createAlertDefinition(client.Config.HTTP, address.String(), client.Config.Token, alert)
-}
-
-func createAlertDefinition(client *http.Client, address string, token string, definition *alert) error {
-	body, err := json.Marshal(definition)
-	if err != nil {
-		return err
-	}
-
-	request, err := http.NewRequest(http.MethodPost, address, bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("content-type", "application/json")
-	addAlertAuthentication(request, token)
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-
-	err = json.NewDecoder(response.Body).Decode(&definition)
-	defer response.Body.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (client *AlertsClient) UpdateAlertDefinition(alert *alert) error {
-	address, err := url.Parse(fmt.Sprintf("%s/v1/alertDefinitions", strings.TrimRight(client.Config.Address, "/")))
-	if err != nil {
-		return err
-	}
-
-	if alert == nil {
-		return errors.New("Provided alert definition cannot be nil")
-	}
-	if alert.ID == "" {
-		return errors.New("Empty ID attribute in alert definition")
-	}
-
-	return updateAlertDefinition(client.Config.HTTP, address.String(), client.Config.Token, alert)
-}
-
-func updateAlertDefinition(client *http.Client, address string, token string, definition *alert) error {
-	body, err := json.Marshal(definition)
-	if err != nil {
-		return err
-	}
-
-	request, err := http.NewRequest(http.MethodPut, address, bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-
-	request.Header.Set("content-type", "application/json")
-	addAlertAuthentication(request, token)
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-
-	err = json.NewDecoder(response.Body).Decode(&definition)
-	defer response.Body.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func updateAlertDefinitionStatusBulk(client *http.Client, address string, token string) error {
-	request, err := http.NewRequest(http.MethodPut, address, nil)
-	if err != nil {
-		return err
-	}
-
-	addAlertAuthentication(request, token)
-
-	_, err = client.Do(request)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (client *AlertsClient) UpdateAlertDefinitionStatusBulk(alerts []string, enable bool) error {
-	address, err := url.Parse(fmt.Sprintf("%s/v1/alertDefinitions", strings.TrimRight(client.Config.Address, "/")))
-	if err != nil {
-		return err
-	}
-
-	for i := range alerts {
-		address.Query().Add("alertIds", alerts[i])
-	}
-
-	address.Query().Add("enable", strconv.FormatBool(enable))
-
-	return updateAlertDefinitionStatusBulk(client.Config.HTTP, address.String(), client.Config.Token)
-}
-
-func deleteAlertDefinitionBulk(client *http.Client, address string, token string) error {
-	request, err := http.NewRequest(http.MethodDelete, address, nil)
-	if err != nil {
-		return err
-	}
-
-	addAlertAuthentication(request, token)
-
-	_, err = client.Do(request)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (client *AlertsClient) DeleteAlertDefinitionBulk(alerts []string) error {
-	address, err := url.Parse(fmt.Sprintf("%s/v1/alertDefinitions", strings.TrimRight(client.Config.Address, "/")))
-	if err != nil {
-		return err
-	}
-
-	for i := range alerts {
-		address.Query().Add("alertIds", alerts[i])
-	}
-
-	return deleteAlertDefinitionBulk(client.Config.HTTP, address.String(), client.Config.Token)
-}
-
-// Add authentication information specific to the Devo Alerts API.
-func addAlertAuthentication(request *http.Request, token string) {
-	if request == nil {
-		return
-	}
-
-	request.Header.Set("standAloneToken", token)
-}
-*/
-
-/////////////////////////////////
-
-type AlertsService interface {
-	List(parameters *ListAlertDefinitionsParameters) ([]Alert, error)
-	Create(createRequest *AlertCreateRequest) (*Alert, error)
-}
-
-type AlertsServiceOp struct {
-	client *Client
-}
-
-const (
-	// Default endpoint for US based Devo domains.
-	ALERTS_API_US_DEFAULT_ENDPOINT = "https://api-us.devo.com/alerts"
-
-	// Default endpoint for EU based Devo domains.
-	ALERTS_API_EU_DEFAULT_ENDPOINT = "https://api-eu.devo.com/alerts"
-
-	// Default path for API Alerting
-	ALERTS_API_PATH_ALERT_DEFINITIONS = "/v1/alertDefinitions"
-)
-
-func (s *AlertsServiceOp) List(parameters *ListAlertDefinitionsParameters) ([]Alert, error) {
+func (s *AlertsServiceOp) List(parameters *AlertListRequest) ([]Alert, error) {
 	u, err := s.client.AlertsEndpoint.Parse(ALERTS_API_PATH_ALERT_DEFINITIONS)
 	if err != nil {
 		return nil, err
@@ -378,6 +174,100 @@ func (s *AlertsServiceOp) Create(createRequest *AlertCreateRequest) (*Alert, err
 	}
 
 	return &alert, nil
+}
+
+type AlertUpdateRequest struct {
+	Name                    string                  `json:"name"`
+	Message                 string                  `json:"message,omitempty"`
+	Description             string                  `json:"description,omitempty"`
+	Subcategory             string                  `json:"subcategory,omitempty"`
+	AlertCorrelationContext AlertCorrelationContext `json:"alertCorrelationContext,omitempty"`
+}
+
+func (s *AlertsServiceOp) Update(updateRequest *AlertUpdateRequest) (*Alert, error) {
+	if updateRequest == nil {
+		return nil, errors.New("Update request cannot be empty")
+	}
+
+	u, err := s.client.AlertsEndpoint.Parse(ALERTS_API_PATH_ALERT_DEFINITIONS)
+	if err != nil {
+		return nil, err
+	}
+
+	request, err := alertsNewRequest(s.client, "PUT", u.String(), updateRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	alert := Alert{}
+	_, err = alertsDo(s.client, request, alert)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &alert, nil
+}
+
+type AlertDeleteRequest struct {
+	AlertIDs []string
+}
+
+func (s *AlertsServiceOp) Delete(deleteRequest *AlertDeleteRequest) error {
+	if deleteRequest == nil {
+		return errors.New("Delete request cannot be empty")
+	}
+	if len(deleteRequest.AlertIDs) < 1 {
+		return errors.New("No alert IDs in delete request")
+	}
+
+	u, err := s.client.AlertsEndpoint.Parse(ALERTS_API_PATH_ALERT_DEFINITIONS)
+	if err != nil {
+		return err
+	}
+
+	for i := range deleteRequest.AlertIDs {
+		u.Query().Add("alertIds", deleteRequest.AlertIDs[i])
+	}
+
+	_, err = alertsNewRequest(s.client, "DELETE", u.String(), deleteRequest)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type AlertStatusUpdateRequest struct {
+	AlertIDs []string
+	Enable   bool
+}
+
+func (s *AlertsServiceOp) Status(statusRequest *AlertStatusUpdateRequest) error {
+	if statusRequest == nil {
+		return errors.New("Delete request cannot be empty")
+	}
+	if len(statusRequest.AlertIDs) < 1 {
+		return errors.New("No alert IDs in delete request")
+	}
+
+	u, err := s.client.AlertsEndpoint.Parse(ALERTS_API_PATH_ALERT_DEFINITIONS_STATUS)
+	if err != nil {
+		return err
+	}
+
+	for i := range statusRequest.AlertIDs {
+		u.Query().Add("alertIds", statusRequest.AlertIDs[i])
+	}
+
+	u.Query().Add("enable", strconv.FormatBool(statusRequest.Enable))
+
+	_, err = alertsNewRequest(s.client, "PUT", u.String(), statusRequest)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // alertsNewRequest create a new API request for the Alerting API. A relative URL can be provided in urlStr
