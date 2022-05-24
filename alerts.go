@@ -71,8 +71,8 @@ const (
 	ALERTS_API_PATH_ALERT_DEFINITIONS_STATUS = "/v1/alertDefinitions/status"
 )
 
-// Type ListAlertDefinitionsParameters contains the parameters that can be used
-// provided to the ListAlertDefinitions method.
+// AlertListRequest contains the parameters that can be
+// provided to the List method.
 //
 // The documentation for the upstream Devo API can be found here:
 // https://docs.devo.com/confluence/ndt/latest/api-reference/alerting-api/working-with-alert-definitions#id-.Workingwithalertdefinitionsvv7.11.0-createalertCreateanewalertdefinition
@@ -109,6 +109,8 @@ type AlertListRequest struct {
 	IDFilter string
 }
 
+// List lists all the alert definitions in your Devo domain. Accepts parameters
+// in the form of a pointer to an AlertListRequest struct.
 func (s *AlertsServiceOp) List(parameters *AlertListRequest) ([]Alert, error) {
 	u, err := s.client.AlertsEndpoint.Parse(ALERTS_API_PATH_ALERT_DEFINITIONS)
 	if err != nil {
@@ -151,6 +153,11 @@ func (s *AlertsServiceOp) List(parameters *AlertListRequest) ([]Alert, error) {
 	return alerts, nil
 }
 
+// AlertCreateRequest contains parameters used when creating a new alert
+// definition in your Devo domain using Create. The parameters Name,
+// Subcategory and AlertCorrelationContext are required by the upstream API,
+// more information can be found in the upstream documentation here:
+// https://docs.devo.com/confluence/ndt/latest/api-reference/alerts-api/working-with-alert-definitions
 type AlertCreateRequest struct {
 	Name                    string                  `json:"name"`
 	Message                 string                  `json:"message,omitempty"`
@@ -159,6 +166,19 @@ type AlertCreateRequest struct {
 	AlertCorrelationContext AlertCorrelationContext `json:"alertCorrelationContext"`
 }
 
+// Create creates a new alert definition in your Devo domain. Accepts
+// parameters in the form of a pointer to a AlertCreateRequest struct.
+//
+// As per AlertCreateRequest documentation, certain attributes are required
+// by the upstream API. These attributes aren't checked before submitting an
+// API request and any errors from the API will be returned by this function.
+// FIXME: Tests for this cannot be created right now, as Devo doesn't document
+// what an error response looks like.
+//
+// Upstream API documentation can be found here:
+// https://docs.devo.com/confluence/ndt/latest/api-reference/alerts-api/working-with-alert-definitions
+//
+// Returns an error if createRequest isn't provided.
 func (s *AlertsServiceOp) Create(createRequest *AlertCreateRequest) (*Alert, error) {
 	if createRequest == nil {
 		return nil, errors.New("Create request cannot be empty")
