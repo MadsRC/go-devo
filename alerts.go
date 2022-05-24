@@ -116,16 +116,24 @@ func (s *AlertsServiceOp) List(parameters *AlertListRequest) ([]Alert, error) {
 	}
 
 	if parameters.Page != "" {
-		u.Query().Add("page", parameters.Page)
+		query := u.Query()
+		query.Add("page", parameters.Page)
+		u.RawQuery = query.Encode()
 	}
 	if parameters.Size != "" {
-		u.Query().Add("size", parameters.Size)
+		query := u.Query()
+		query.Add("size", parameters.Size)
+		u.RawQuery = query.Encode()
 	}
 	if parameters.NameFilter != "" {
-		u.Query().Add("nameFilter", parameters.NameFilter)
+		query := u.Query()
+		query.Add("nameFilter", parameters.NameFilter)
+		u.RawQuery = query.Encode()
 	}
 	if parameters.IDFilter != "" {
-		u.Query().Add("idFilter", parameters.IDFilter)
+		query := u.Query()
+		query.Add("idFilter", parameters.IDFilter)
+		u.RawQuery = query.Encode()
 	}
 
 	request, err := alertsNewRequest(s.client, "GET", u.String(), nil)
@@ -218,7 +226,7 @@ func (s *AlertsServiceOp) Delete(deleteRequest *AlertDeleteRequest) error {
 		return errors.New("Delete request cannot be empty")
 	}
 	if len(deleteRequest.AlertIDs) < 1 {
-		return errors.New("No alert IDs in delete request")
+		return errors.New("no alert IDs in delete request")
 	}
 
 	u, err := s.client.AlertsEndpoint.Parse(ALERTS_API_PATH_ALERT_DEFINITIONS)
@@ -227,7 +235,9 @@ func (s *AlertsServiceOp) Delete(deleteRequest *AlertDeleteRequest) error {
 	}
 
 	for i := range deleteRequest.AlertIDs {
-		u.Query().Add("alertIds", deleteRequest.AlertIDs[i])
+		query := u.Query()
+		query.Add("alertIds", deleteRequest.AlertIDs[i])
+		u.RawQuery = query.Encode()
 	}
 
 	_, err = alertsNewRequest(s.client, "DELETE", u.String(), deleteRequest)
@@ -248,7 +258,7 @@ func (s *AlertsServiceOp) Status(statusRequest *AlertStatusUpdateRequest) error 
 		return errors.New("Delete request cannot be empty")
 	}
 	if len(statusRequest.AlertIDs) < 1 {
-		return errors.New("No alert IDs in delete request")
+		return errors.New("no alert IDs in delete request")
 	}
 
 	u, err := s.client.AlertsEndpoint.Parse(ALERTS_API_PATH_ALERT_DEFINITIONS_STATUS)
@@ -257,10 +267,14 @@ func (s *AlertsServiceOp) Status(statusRequest *AlertStatusUpdateRequest) error 
 	}
 
 	for i := range statusRequest.AlertIDs {
-		u.Query().Add("alertIds", statusRequest.AlertIDs[i])
+		query := u.Query()
+		query.Add("alertIds", statusRequest.AlertIDs[i])
+		u.RawQuery = query.Encode()
 	}
 
-	u.Query().Add("enable", strconv.FormatBool(statusRequest.Enable))
+	query := u.Query()
+	query.Add("enable", strconv.FormatBool(statusRequest.Enable))
+	u.RawQuery = query.Encode()
 
 	_, err = alertsNewRequest(s.client, "PUT", u.String(), statusRequest)
 	if err != nil {
