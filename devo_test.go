@@ -66,9 +66,51 @@ func testClientDefaults(t *testing.T, c *Client) {
 func TestNewClient(t *testing.T) {
 	c, err := New(nil)
 	if err != nil {
-		t.Fatalf("New(): %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	testClientDefaults(t, c)
+}
+
+func TestCustomAlertsEndpoint(t *testing.T) {
+	tests := []struct {
+		description string
+		input       string
+		output      string
+		expectErr   bool
+	}{
+		{"custom endpoint", "https://google.com", "https://google.com", false},
+		{"unparsable endpoint", " thisisinvalid://", "", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			c, err := New(nil, SetAlertsEndpoint(tc.input))
+			if tc.expectErr {
+				if err == nil {
+					t.Fatal("expected err, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if c.AlertsEndpoint.String() != tc.output {
+					t.Fatalf("expected custom endpoint %s; got %s", tc.output, c.AlertsEndpoint.String())
+				}
+			}
+		})
+	}
+}
+
+func TestAlertsToken(t *testing.T) {
+	token := "Call me Ishmael"
+	c, err := New(nil, SetAlertsToken(token))
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if c.AlertsToken != token {
+		t.Errorf("token = %s; expected %s", c.AlertsToken, token)
+	}
 }
 
 func TestCustomUserAgent(t *testing.T) {
@@ -76,10 +118,10 @@ func TestCustomUserAgent(t *testing.T) {
 	c, err := New(nil, SetUserAgent(userAgent))
 
 	if err != nil {
-		t.Fatalf("New() unexpected error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if c.UserAgent != userAgent {
-		t.Errorf("New() UserAgent = %s; expected %s", c.UserAgent, userAgent)
+		t.Errorf("userAgent = %s; expected %s", c.UserAgent, userAgent)
 	}
 }
