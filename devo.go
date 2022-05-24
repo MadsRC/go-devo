@@ -12,36 +12,69 @@ package devo
 
 import (
 	"net/http"
-	"time"
+	"net/url"
 )
 
 const (
-	// Default endpoint for US based Devo domains.
-	ALERTS_API_US_DEFAULT_ENDPOINT = "https://api-us.devo.com/alerts"
-
-	// Default endpoint for EU based Devo domains.
-	ALERTS_API_EU_DEFAULT_ENDPOINT = "https://api-eu.devo.com/alerts"
+	// Default User Agent for HTTP requests
+	defaultUserAgent = "go-devo"
 )
 
-type Config struct {
-	HTTP   *http.Client
-	Alerts *AlertsConfig
-}
-
 type Client struct {
-	config *Config
-	Alerts *AlertsClient
+	client    *http.Client
+	UserAgent string
+
+	Alerts         AlertsService
+	AlertsEndpoint *url.URL
+	AlertsToken    string
 }
 
-func NewClient(config *Config) *Client {
-	if config == nil {
-		config = &Config{}
-	}
-	if config.HTTP == nil {
-		config.HTTP = &http.Client{Timeout: 10 * time.Second}
+type ClientOpt func(*Client) error
+
+func New(httpClient *http.Client, opts ...ClientOpt) (*Client, error) {
+	if httpClient == nil {
+		httpClient = http.DefaultClient
 	}
 
-	alerts := NewAlertsClient(config.Alerts)
+	c := &Client{client: httpClient, UserAgent: defaultUserAgent}
+	c.Alerts = &AlertsServiceOp{client: c}
+	u, _ := url.Parse(ALERTS_API_US_DEFAULT_ENDPOINT)
+	c.AlertsEndpoint = u
 
-	return &Client{config: config, Alerts: alerts}
+	for _, opt := range opts {
+		err := opt(c)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return c, nil
+}
+
+func SetUserAgent(userAgent string) ClientOpt {
+	return func(c *Client) error {
+		c.UserAgent = userAgent
+		return nil
+
+	}
+}
+
+func SetAlertsEndpoint(endpoint string) ClientOpt {
+	return func(c *Client) error {
+		u, err := url.Parse(endpoint)
+		if err != nil {
+			return err
+		}
+
+		c.AlertsEndpoint = u
+		return nil
+
+	}
+}
+
+func SetAlertsToken(token string) ClientOpt {
+	return func(c *Client) error {
+		c.AlertsToken = token
+		return nil
+	}
 }

@@ -7,40 +7,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"io"
 	"net/http"
-	"net/url"
-	"strconv"
-	"strings"
-	"time"
 )
 
-type AlertsConfig struct {
-	HTTP    *http.Client
-	Token   string
-	Address string
-}
-
-type AlertsClient struct {
-	Config *AlertsConfig
-}
-
-func NewAlertsClient(config *AlertsConfig) *AlertsClient {
-	if config == nil {
-		config = &AlertsConfig{}
-	}
-	if config.HTTP == nil {
-		config.HTTP = &http.Client{Timeout: 10 * time.Second}
-	}
-
-	if config.Address == "" {
-		config.Address = ALERTS_API_US_DEFAULT_ENDPOINT
-	}
-
-	return &AlertsClient{Config: config}
-}
-
-type alertCorrelationTrigger struct {
+type AlertCorrelationTrigger struct {
 	Kind              string `json:"kind"`
 	ExternalOffset    string `json:"externalOffset"`
 	InternalPeriod    string `json:"internalPeriod"`
@@ -52,13 +23,13 @@ type alertCorrelationTrigger struct {
 	AggregationColumn string `json:"aggregationColumn"`
 }
 
-type alertCorrelationContext struct {
+type AlertCorrelationContext struct {
 	QuerySourceCode    string                  `json:"querySourceCode"`
 	Priority           int                     `json:"priority"`
-	CorrelationTrigger alertCorrelationTrigger `json:"correlationTrigger"`
+	CorrelationTrigger AlertCorrelationTrigger `json:"correlationTrigger"`
 }
 
-type alert struct {
+type Alert struct {
 	ID                      string `json:"id"`
 	CreationDate            int    `json:"creationDate"`
 	Name                    string `json:"name"`
@@ -69,7 +40,7 @@ type alert struct {
 	SubcategoryID           string `json:"subcategoryId"`
 	IsActive                bool   `json:"isActive"`
 	IsAlertChain            bool   `json:"isAlertChain"`
-	AlertCorrelationContext alertCorrelationContext
+	AlertCorrelationContext AlertCorrelationContext
 	ActionPolicyID          []interface{} `json:"actionPolicyId"`
 }
 
@@ -110,6 +81,8 @@ type ListAlertDefinitionsParameters struct {
 	// found in the Devo application.
 	IDFilter string
 }
+
+/*
 
 func (client *AlertsClient) ListAlertDefinitions(parameters *ListAlertDefinitionsParameters) ([]alert, error) {
 	address, err := url.Parse(fmt.Sprintf("%s/v1/alertDefinitions", strings.TrimRight(client.Config.Address, "/")))
@@ -315,4 +288,160 @@ func addAlertAuthentication(request *http.Request, token string) {
 	}
 
 	request.Header.Set("standAloneToken", token)
+}
+*/
+
+/////////////////////////////////
+
+type AlertsService interface {
+	List(parameters *ListAlertDefinitionsParameters) ([]Alert, error)
+	Create(createRequest *AlertCreateRequest) (*Alert, error)
+}
+
+type AlertsServiceOp struct {
+	client *Client
+}
+
+const (
+	// Default endpoint for US based Devo domains.
+	ALERTS_API_US_DEFAULT_ENDPOINT = "https://api-us.devo.com/alerts"
+
+	// Default endpoint for EU based Devo domains.
+	ALERTS_API_EU_DEFAULT_ENDPOINT = "https://api-eu.devo.com/alerts"
+
+	// Default path for API Alerting
+	ALERTS_API_PATH_ALERT_DEFINITIONS = "/v1/alertDefinitions"
+)
+
+func (s *AlertsServiceOp) List(parameters *ListAlertDefinitionsParameters) ([]Alert, error) {
+	u, err := s.client.AlertsEndpoint.Parse(ALERTS_API_PATH_ALERT_DEFINITIONS)
+	if err != nil {
+		return nil, err
+	}
+
+	if parameters.Page != "" {
+		u.Query().Add("page", parameters.Page)
+	}
+	if parameters.Size != "" {
+		u.Query().Add("size", parameters.Size)
+	}
+	if parameters.NameFilter != "" {
+		u.Query().Add("nameFilter", parameters.NameFilter)
+	}
+	if parameters.IDFilter != "" {
+		u.Query().Add("idFilter", parameters.IDFilter)
+	}
+
+	request, err := alertsNewRequest(s.client, "GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	alerts := []Alert{}
+	_, err = alertsDo(s.client, request, alerts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return alerts, nil
+}
+
+type AlertCreateRequest struct {
+	Name                    string                  `json:"name"`
+	Message                 string                  `json:"message,omitempty"`
+	Description             string                  `json:"description,omitempty"`
+	Subcategory             string                  `json:"subcategory"`
+	AlertCorrelationContext AlertCorrelationContext `json:"alertCorrelationContext"`
+}
+
+func (s *AlertsServiceOp) Create(createRequest *AlertCreateRequest) (*Alert, error) {
+	if createRequest == nil {
+		return nil, errors.New("Create request cannot be empty")
+	}
+
+	u, err := s.client.AlertsEndpoint.Parse(ALERTS_API_PATH_ALERT_DEFINITIONS)
+	if err != nil {
+		return nil, err
+	}
+
+	request, err := alertsNewRequest(s.client, "POST", u.String(), createRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	alert := Alert{}
+	_, err = alertsDo(s.client, request, alert)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &alert, nil
+}
+
+// alertsNewRequest create a new API request for the Alerting API. A relative URL can be provided in urlStr
+// which will be resolved to the AlertsEndpoint of the Client. Relative URLS should always be specified without
+// a preceding slash. If specified, the value pointed to by body is JSON encoded and included in as the
+// request body.
+func alertsNewRequest(client *Client, method string, urlStr string, body interface{}) (*http.Request, error) {
+	u, err := client.AlertsEndpoint.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+
+	var request *http.Request
+	switch method {
+	case http.MethodGet:
+		request, err = http.NewRequest(method, u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		buf := new(bytes.Buffer)
+		if body != nil {
+			err = json.NewEncoder(buf).Encode(body)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		request, err = http.NewRequest(method, u.String(), buf)
+		if err != nil {
+			return nil, err
+		}
+		request.Header.Set("Content-Type", "application/json")
+	}
+
+	request.Header.Set("User-Agent", client.UserAgent)
+	request.Header.Set("standAloneToken", client.AlertsToken)
+
+	return request, nil
+}
+
+// alertsDo will send an API request to the Alerting API. The API response is JSON decoded and
+// stored in the value pointed to by value. If value implements the io.Writer interface, the
+// raw response will be written to value, without attempting to decode it.
+func alertsDo(client *Client, request *http.Request, value interface{}) (*http.Response, error) {
+	response, err := client.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+
+	if value != nil {
+		w, ok := value.(io.Writer)
+		if ok {
+			_, err = io.Copy(w, response.Body)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			err = json.NewDecoder(response.Body).Decode(value)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return response, nil
 }
