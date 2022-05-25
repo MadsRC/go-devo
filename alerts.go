@@ -12,6 +12,7 @@ import (
 	"strconv"
 )
 
+// AlertCorrelationTrigger represents an alert correlation trigger.
 type AlertCorrelationTrigger struct {
 	Kind              string `json:"kind"`
 	ExternalOffset    string `json:"externalOffset"`
@@ -24,12 +25,14 @@ type AlertCorrelationTrigger struct {
 	AggregationColumn string `json:"aggregationColumn"`
 }
 
+// AlertCorrelationContext represents an alert correlation context.
 type AlertCorrelationContext struct {
 	QuerySourceCode    string                  `json:"querySourceCode"`
 	Priority           int                     `json:"priority"`
 	CorrelationTrigger AlertCorrelationTrigger `json:"correlationTrigger"`
 }
 
+// Alert represents an alert definition.
 type Alert struct {
 	ID                      string `json:"id"`
 	CreationDate            int    `json:"creationDate"`
@@ -45,6 +48,7 @@ type Alert struct {
 	ActionPolicyID          []interface{} `json:"actionPolicyId"`
 }
 
+// AlertService is an interface for interfacing with the Devo Alerting API.
 type AlertsService interface {
 	List(parameters *AlertListRequest) ([]Alert, error)
 	Create(createRequest *AlertCreateRequest) (*Alert, error)
@@ -53,6 +57,8 @@ type AlertsService interface {
 	Status(statusRequest *AlertStatusUpdateRequest) error
 }
 
+// AlertsServiceOp implements the AlertService interface and handles the
+// communication with the Devo Alerting API using its methods.
 type AlertsServiceOp struct {
 	client *Client
 }
@@ -204,6 +210,10 @@ func (s *AlertsServiceOp) Create(createRequest *AlertCreateRequest) (*Alert, err
 	return &alert, nil
 }
 
+// AlertUpdateRequest contains parameters used when updating an alert definition
+// in your Devo domain using Update. The parameter Name are required by the
+// upstream API, more information can be found in the upstream documentation here:
+// https://docs.devo.com/confluence/ndt/latest/api-reference/alerts-api/working-with-alert-definitions
 type AlertUpdateRequest struct {
 	Name                    string                  `json:"name"`
 	Message                 string                  `json:"message,omitempty"`
@@ -212,6 +222,19 @@ type AlertUpdateRequest struct {
 	AlertCorrelationContext AlertCorrelationContext `json:"alertCorrelationContext,omitempty"`
 }
 
+// Update updates an existing alert definition in your Devo domain. Accepts parameters
+// in the form of a pointer to a AlertUpdateRequst struct.
+//
+// As per AlertUpdateRequest documentation, certain attributes are required
+// by the upstream API. These attributes aren't checked before submitting an
+// API request and any errors from the API will be returned by this function.
+// FIXME: Tests for this cannot be created right now, as Devo doesn't document
+// what an error response looks like.
+//
+// Upstream API documentation can be found here:
+// https://docs.devo.com/confluence/ndt/latest/api-reference/alerts-api/working-with-alert-definitions
+//
+// Returns an error if updateRequest isn't provided.
 func (s *AlertsServiceOp) Update(updateRequest *AlertUpdateRequest) (*Alert, error) {
 	if updateRequest == nil {
 		return nil, errors.New("Update request cannot be empty")
@@ -237,10 +260,17 @@ func (s *AlertsServiceOp) Update(updateRequest *AlertUpdateRequest) (*Alert, err
 	return &alert, nil
 }
 
+// AlertDeleteRequest contains parameters used when deleting an alert
+// definition in your Devo domain using Delete.
 type AlertDeleteRequest struct {
 	AlertIDs []string
 }
 
+// Delete deletes one or more alerts in your Devo domain. Accepts parameters
+// in the form of a pointer to a AlertDeleteRequest struct.
+//
+// Returns an error if deleteRequest isn't provided.
+// Returns an error if deleteRequest.AlertIDs is empty.
 func (s *AlertsServiceOp) Delete(deleteRequest *AlertDeleteRequest) error {
 	if deleteRequest == nil {
 		return errors.New("Delete request cannot be empty")
@@ -268,11 +298,18 @@ func (s *AlertsServiceOp) Delete(deleteRequest *AlertDeleteRequest) error {
 	return nil
 }
 
+// AlertStatusUpdateRequest contains parameters used when changing the status
+// of alert definitions in your Devo domain using Status.
 type AlertStatusUpdateRequest struct {
 	AlertIDs []string
 	Enable   bool
 }
 
+// Status sets the status of one or more alerts in your Devo domain. Accepts
+// parameters in the form of a pointer to a AlertStatusUpdateRequest.
+//
+// Returns an error if statusRequest isn't provided.
+// Returns an error if statusRequest.AlertIDs is empty.
 func (s *AlertsServiceOp) Status(statusRequest *AlertStatusUpdateRequest) error {
 	if statusRequest == nil {
 		return errors.New("Delete request cannot be empty")
